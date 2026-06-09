@@ -67,9 +67,10 @@ async function geocode(address: string): Promise<{ lat: number, lng: number } | 
   return null;
 }
 
-export async function fetchAndProcessData(): Promise<GatheringPoint[]> {
+export async function fetchAndProcessData(onProgress?: (progressMsg: string) => void): Promise<GatheringPoint[]> {
   const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ4_PxwLzCR6RiaETujwtmFjIdGJdaIDORh2JSrevQN4iU2YtM3xnUvmYdYxOF9U88CWgpBQU9n2PM9/pub?gid=1984947279&single=true&output=csv";
   
+  if (onProgress) onProgress('Veriler indiriliyor...');
   const res = await fetch(csvUrl);
   const csvText = await res.text();
   
@@ -94,7 +95,7 @@ export async function fetchAndProcessData(): Promise<GatheringPoint[]> {
     const mahalle = getVal('mahalle');
     const sokak = getVal('sokak');
     const alanAdi = getVal('alan adı');
-    const tip = getVal('tip');
+    const tip = getVal('tür') || getVal('tip') || getVal('tur');
     const latStr = getVal('enlem');
     const lngStr = getVal('boylam');
     const kapasite = getVal('kapasite');
@@ -118,23 +119,10 @@ export async function fetchAndProcessData(): Promise<GatheringPoint[]> {
     });
   }
 
-  // Geocode missing coordinates sequentially to respect nominatim rate limits
-  for (const pt of points) {
-    if (!pt.lat || !pt.lng) {
-      if (pt.alanAdi) {
-         // Query: District, Neighborhood, Place Name
-         const query = `İstanbul ${pt.ilce} ${pt.mahalle} ${pt.alanAdi}`.replace(/\s+/g, ' ');
-         const coords = await geocode(query);
-         if (coords) {
-           pt.lat = coords.lat;
-           pt.lng = coords.lng;
-         }
-         // Rate limiting delay
-         await sleep(1100);
-      }
-    }
-  }
-
-  // filter out perfectly failing ones softly
-  return points.filter(p => p.lat !== null && p.lng !== null);
+  // filter out points with missing coordinates
+  const validPoints = points.filter(p => p.lat !== null && p.lng !== null);
+  
+  if (onProgress) onProgress(`Harita Yükleniyor... (${validPoints.length} alan hazır)`);
+  
+  return validPoints;
 }
